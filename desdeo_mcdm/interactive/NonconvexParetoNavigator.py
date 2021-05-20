@@ -1,4 +1,4 @@
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -14,7 +14,7 @@ Nonconvex Pareto Navigator (NPN)
 
 class NPNClassificationRequest(BaseRequest): # TODO more request classes: Nimbus vs NautilusNavigator
     """
-    Request to handle interactions with Nonconvex Pareto Navigator.
+    Request to handle classifications of objectives in Nonconvex Pareto Navigator.
 
     Args: 
         aspiration_levels (np.ndarray): A list of aspiration levels for each objective
@@ -119,8 +119,29 @@ class NonconvexParetoNavigator(InteractiveMethod):
     ):
         return
     
+    def iterate(
+        self,
+        request: Union[ # Others maybe
+            NPNClassificationRequest
+        ],
+    ) -> Tuple[Union[NPNClassificationRequest], Union[SimplePlotRequest, None]]:
+        req = self.handle_request(request)
+        return req
+    
+    def handle_request(
+        self,
+        request: Union[ # Others maybe
+            NPNClassificationRequest
+        ],
+    ):
+        return
+
+    
     def solve_asf_problem(
-        self,pareto_front: np.ndarray, ref_point: np.ndarray, ideal: np.ndarray, nadir: np.ndarray
+        self,pareto_front: np.ndarray,
+        ref_point: np.ndarray,
+        ideal: np.ndarray,
+        nadir: np.ndarray
     ) -> int:
         """Forms and solves the achievement scalarizing function to find the
         closest point on the Pareto optimal front to the given reference
@@ -183,6 +204,22 @@ class NonconvexParetoNavigator(InteractiveMethod):
         k = eps.shape[0]
         v = [[-eps[j] if j != i else 1 for i in range(k)] for j in range(k)]
         return v
+    
+    def calculate_ref_points(
+        self,
+        nav_point: np.ndarray,
+        ideal: np.ndarray,
+        eps: float,
+        step_count: int,
+        nav_par_ubound: int,
+    ):
+        ref_point = 0 # fun
+        return
+    
+    def calculate_navigation_point(
+        self,
+    ):
+        return
 
 
 
