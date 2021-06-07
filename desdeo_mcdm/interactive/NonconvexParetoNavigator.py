@@ -2,6 +2,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
+from desdeo_problem.Problem import MOProblem, DiscreteDataProblem
 from desdeo_mcdm.interactive.InteractiveMethod import InteractiveMethod
 from desdeo_tools.interaction.request import BaseRequest, SimplePlotRequest
 from desdeo_tools.scalarization.ASF import PointMethodASF
@@ -12,7 +13,114 @@ from desdeo_tools.solver.ScalarSolver import DiscreteMinimizer
 Nonconvex Pareto Navigator (NPN)
 """
 
-class NPNClassificationRequest(BaseRequest): # TODO more request classes: Nimbus vs NautilusNavigator
+
+class NPNException(Exception):
+    """
+    Raised when an exception related to Nonconvex Pareto Navigator (NPN) is encountered. 
+    """
+
+    pass
+
+
+class NPNInitialRequest(BaseRequest):
+    """
+    A request class to handle the Decision Maker's initial preferences for the first iteration round.
+
+    In what follows, the DM is involved. First, the DM is asked to select a starting
+    point for the navigation phase.
+    """
+
+    def __init__(
+        self,
+        # ideal: np.ndarray,
+        # nadir: np.ndarray,
+        allowed_speeds: np.ndarray,
+        po_solutions: np.ndarray,
+    ):
+        """
+        Args:
+            ideal (np.ndarray): Ideal vector
+            nadir (np.ndarray): Nadir vector
+            allowed_speeds (np.ndarray): Allowed movement speeds
+            po_solutions: (np.ndarray): A small set of pareto optimal solutions
+        """
+
+        self._allowed_speeds = allowed_speeds
+        self._po_solutions = po_solutions
+
+        min_speed = np.min(self._allowed_speeds)
+        max_speed = np.max(self._allowed_speeds)
+
+        msg = "Please specify a starting point as 'preferred_solution'."
+        "Or specify a reference point as 'reference_point'."
+        "Please specify speed as 'speed' to be an integer value between"
+        f"{min_speed} and {max_speed} "
+        f"where {min_speed} is the slowest speed and {max_speed} the fastest."
+
+        content = {
+            "message": msg,
+            "pareto_optimal_solutions": po_solutions,
+            "allowed_speeds": allowed_speeds,
+        }
+
+        super().__init__("preferred_solution_preference", "required", content=content)
+
+    @classmethod
+    def init_with_method(cls, method: InteractiveMethod):
+        """
+        Initialize request with given instance of ParetoNavigator.
+
+        Args:
+            method (ParetoNavigator): Instance of ReferencePointMethod-class.
+        Returns:
+            ParetoNavigatorInitialRequest: Initial request.
+        """
+
+        return cls(
+            method._allowed_speeds,
+            method._pareto_optimal_solutions,
+        )
+
+    @BaseRequest.response.setter
+    def response(self, response: Dict) -> None:
+        """
+        Set the Decision Maker's response information for initial request.
+
+        Args:
+            response (Dict): The Decision Maker's response.
+
+        Raises:
+            ParetoNavigatorException: In case reference point
+            or preferred solution is missing.
+        """
+
+
+        if "preferred_solution" in response:
+            # Validate
+            pass
+        else:
+            msg = "Please specify either a starting point as 'preferred_solution'."
+            "or a reference point as 'reference_point."
+            raise NPNException(msg)
+
+        if "speed" not in response:
+            msg = "Please specify a speed as 'speed'"
+            raise NPNException(msg)
+
+        speed = response["speed"]
+        try:
+            if int(speed) not in self._allowed_speeds:
+                raise NPNException(f"Invalid speed: {speed}.")
+        except Exception as e:
+            raise NPNException(
+                f"An exception rose when validating the given speed {speed}.\n"
+                f"Previous exception: {type(e)}: {str(e)}."
+            )
+
+        self._response = response
+
+
+class NPNClassificationRequest(BaseRequest):
     """
     Request to handle classifications of objectives in Nonconvex Pareto Navigator.
 
@@ -22,11 +130,11 @@ class NPNClassificationRequest(BaseRequest): # TODO more request classes: Nimbus
         navigation_point (np.ndarray): Current navigation point
     """
 
-    def __init__( # TODO What else
+    def __init__(
         self,
-        aspiration_levels: np.ndarray,
-        upper_bounds: np.ndarray,
-        navigation_point: np.ndarray,
+        # aspiration_levels: np.ndarray,
+        # upper_bounds: np.ndarray,
+        # navigation_point: np.ndarray,
     ):
         msg = (
             # TODO Make a list of other things needed
@@ -42,13 +150,12 @@ class NPNClassificationRequest(BaseRequest): # TODO more request classes: Nimbus
             "message": msg,
 
         }
-        super().__init__() # TODO
+        super().__init__("classification_preference", "required", content=content) # TODO
     
     @classmethod
     def init_with_method(cls, method):
         return cls(
-            # Same stuff as in __init__ 
-            method.aspiration_levels
+            # TODO
         )
     
     def validator(self, response: Dict) -> None:
@@ -69,7 +176,7 @@ class NPNClassificationRequest(BaseRequest): # TODO more request classes: Nimbus
             NPNException: In case the response in invalid
         """
 
-        # TODO the actual validations
+        # TODO validations
         return
 
     @BaseRequest.response.setter
@@ -77,12 +184,83 @@ class NPNClassificationRequest(BaseRequest): # TODO more request classes: Nimbus
         self.validator(response)
         self._response = response
 
-class NPNException(Exception):
+
+class NPNSolutionRequest(BaseRequest):
     """
-    Raised when an exception related to Nonconvex Pareto Navigator (NPN) is encountered. 
+    A request class to handle ...
     """
 
-    pass
+    def __init__(
+        self,
+        approx_solution: np.ndarray,
+        pareto_optimal_solution: np.ndarray,
+        objective_values: np.ndarray,
+    ):
+        """
+        Args:
+            approx_solution (np.ndarray): The approximated solution received by navigation
+            pareto_optimal_solution (np.ndarray): A pareto optimal solution (decision variables).
+            objective_values (np.ndarray): Objective vector.
+        """
+        msg = (
+            "If you are satisfied with this pareto optimal solution "
+            "please state 'satisfied' as 'True'. This will end the navigation. "
+            "Otherwise state 'satisfied' as 'False and the navigation will "
+            "be continued with this pareto optimal solution added to the approximation."
+        )
+
+        content = {
+            "message": msg,
+            "approximate_solution": approx_solution,
+            "pareto_optimal_solution": pareto_optimal_solution,
+            "objective_values": objective_values,
+        }
+
+        super().__init__("preferred_solution_preference", "required", content=content)
+
+    @BaseRequest.response.setter
+    def response(self, response: Dict) -> None:
+        """
+        Set the Decision Maker's response information for request.
+
+        Args:
+            response (Dict): The Decision Maker's response.
+        """
+        self._response = response
+
+
+class NPNStopRequest(BaseRequest):
+    """
+    A request class to handle termination.
+    """
+
+    def __init__(
+        self,
+        approx_solution: np.ndarray,
+        final_solution: np.ndarray,
+        objective_values: np.ndarray,
+    ):
+        """
+        Initialize termination request with approximate solution,
+        final solution and corresponding objective vector.
+
+        Args:
+            approx_solution (np.ndarray): The approximated solution received by navigation
+            final_solution (np.ndarray): Solution (decision variables).
+            objective_values (np.ndarray): Objective vector.
+        """
+        msg = "Final solution found."
+
+        content = {
+            "message": msg,
+            "approximate_solution": approx_solution,
+            "final_solution": final_solution,
+            "objective_values": objective_values,
+        }
+
+        super().__init__("print", "no_interaction", content=content)
+
+
 
 class NonconvexParetoNavigator(InteractiveMethod):
     """
@@ -106,35 +284,73 @@ class NonconvexParetoNavigator(InteractiveMethod):
 
     Raises:
         NPNException: A dimension mismatch encountered among supplied arguments
-
     """
 
-    def __init_(
+    def __init__(
         self,
+        problem: Union[MOProblem, DiscreteDataProblem],
         pareto_front: np.ndarray,
-        ideal: np.ndarray,
-        nadir: np.ndarray,
-        objective_names: Optional[List[str]] = None,
-        minimize: Optional[List[int]] = None,
     ):
-        return
+        self._problem = problem
+        self._pareto_front = pareto_front
+
+        self._speed = None
+        self._navigation_point = None
+        self._reference_point = None
+
+        self._allowed_speeds = [1,2,3,4,5]
+        self._valid_classifications = ["<", "<=", "=", ">=", "0"]
+    
+    def start(self):
+        return NPNInitialRequest.init_with_method(self), None
     
     def iterate(
         self,
-        request: Union[ # Others maybe
-            NPNClassificationRequest
+        request: Union[
+            NPNInitialRequest,
+            NPNClassificationRequest,
+            NPNSolutionRequest,
+            NPNStopRequest,
         ],
-    ) -> Tuple[Union[NPNClassificationRequest], Union[SimplePlotRequest, None]]:
-        req = self.handle_request(request)
-        return req
-    
-    def handle_request(
+    ) -> Tuple[Union[NPNClassificationRequest, NPNSolutionRequest], Union[SimplePlotRequest, None]]:
+        """
+        TODO
+        """
+        if type(request) is NPNInitialRequest:
+            return self.handle_initial_request(request)
+        elif type(request) is NPNClassificationRequest:
+            return self.handle_classification_request(request)
+        elif type(request) is NPNSolutionRequest:
+            return self.handle_solution_request(request)
+        else:
+            # if stop request, do nothing
+            return request
+
+    def handle_initial_request(
+        self, request: NPNInitialRequest
+    ) -> NPNClassificationRequest:
+        """
+        TODO
+        """
+        pass
+
+    def handle_classification_request(
         self,
-        request: Union[ # Others maybe
-            NPNClassificationRequest
-        ],
+        request: NPNClassificationRequest
     ):
-        return
+        """
+        TODO
+        """
+        pass
+    
+    def handle_solution_request(
+        self,
+        request: NPNStopRequest
+    ):
+        """
+        TODO
+        """
+        pass
 
     
     def solve_asf_problem(
@@ -143,9 +359,7 @@ class NonconvexParetoNavigator(InteractiveMethod):
         ideal: np.ndarray,
         nadir: np.ndarray
     ) -> int:
-        """Forms and solves the achievement scalarizing function to find the
-        closest point on the Pareto optimal front to the given reference
-        point.
+        """Solves the achievement scalarizing function
 
         Args:
             pareto_front (np.ndarray): Approximation of the pareto front
@@ -155,19 +369,14 @@ class NonconvexParetoNavigator(InteractiveMethod):
             nadir (np.ndarray): Nadir point.
         
         Returns:
-            ???
+            np.ndarray: The solution from the projection
         """
-        asf = PointMethodASF(nadir, ideal)
-        scalarizer = DiscreteScalarizer(asf, {"reference_point": ref_point})
-        solver = DiscreteMinimizer(scalarizer)
-
-        res = solver.minimize(pareto_front)
-
-        return res
+        # asf = PointMethodASF(nadir, ideal)
+        pass
     
     def construct_navigation_set(
         self,
-        pareto_outcome: np.ndarray,
+        pareto_solutions: np.ndarray,
     ):
         """
         
